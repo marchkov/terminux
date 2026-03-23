@@ -5,7 +5,7 @@ const projectRoot = process.cwd();
 export function getConfig() {
   return {
     nodeEnv: process.env.NODE_ENV || "development",
-    appHost: process.env.APP_HOST || "127.0.0.1",
+    appHost: process.env.APP_HOST || "0.0.0.0",
     appPort: Number(process.env.APP_PORT || 3000),
     appName: process.env.APP_NAME || "terminux",
     masterKey: process.env.APP_MASTER_KEY || "development-master-key",
