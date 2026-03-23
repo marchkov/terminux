@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      APP_HOST: 0.0.0.0
+      APP_PORT: 3000
+      APP_NAME: terminux
+      APP_MASTER_KEY: change-me-before-production
+      SESSION_SECRET: change-me-too-before-production-32-plus
+      SQLITE_PATH: /app/storage/database.sqlite
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+    volumes:
+      - terminux_data:/app/storage
+
+volumes:
+  terminux_data:
