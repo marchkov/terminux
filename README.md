@@ -99,6 +99,67 @@ Inspect the health probe directly:
 docker inspect --format='{{json .State.Health}}' terminux
 ```
 
+## Safe upgrade without data loss
+
+If you already have real users, groups and SSH sessions in production, update the container with the same named volume so SQLite stays in place.
+
+1. Confirm the volume exists:
+
+```bash
+docker volume ls
+```
+
+You should see `terminux_data` in the list.
+
+2. Optional but recommended: make a backup of the SQLite file before upgrading:
+
+```bash
+docker run --rm -v terminux_data:/data -v $(pwd):/backup alpine sh -c "cp /data/database.sqlite /backup/database.sqlite.backup"
+```
+
+3. Pull the fresh image:
+
+```bash
+docker pull marchkov/terminux:latest
+```
+
+4. Remove the old container only, not the volume:
+
+```bash
+docker rm -f terminux
+```
+
+5. Start the new container with the same volume name and the same `APP_MASTER_KEY` you used before:
+
+```bash
+docker run -d \
+  --name terminux \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -e APP_HOST=0.0.0.0 \
+  -e APP_MASTER_KEY=your-existing-master-key \
+  -e SESSION_SECRET=your-new-or-existing-session-secret-32-plus \
+  -e ADMIN_USERNAME=admin \
+  -e ADMIN_PASSWORD=admin123 \
+  -v terminux_data:/app/storage \
+  marchkov/terminux:latest
+```
+
+6. Verify the container is healthy:
+
+```bash
+docker ps
+docker logs terminux
+docker inspect --format='{{json .State.Health}}' terminux
+```
+
+Important notes:
+
+- keep using the same volume name: `terminux_data`
+- do not run the new container without `-v terminux_data:/app/storage`
+- do not delete the volume unless you really want to wipe the database
+- keep `APP_MASTER_KEY` stable across upgrades, otherwise saved SSH passwords and keys may stop decrypting
+- `SESSION_SECRET` must be at least 32 characters long
 ## GitHub Actions publish
 
 This repository includes a workflow at `.github/workflows/docker-publish.yml`.
@@ -140,3 +201,4 @@ Before exposing the app publicly, make sure you:
 - change the default admin password
 - mount `/app/storage` to persistent disk or a named volume
 - publish only the external port you actually need
+
