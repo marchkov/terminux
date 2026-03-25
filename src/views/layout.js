@@ -17,7 +17,8 @@ export function renderLayout({ appName, title, currentPath, sidebar, content, cu
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title} · ${appName}</title>
+    <title>${title} - ${appName}</title>
+    <link rel="icon" type="image/svg+xml" href="/public/favicon.svg" />
     <link rel="stylesheet" href="/public/styles.css" />
     ${headExtras}
   </head>
@@ -48,7 +49,13 @@ export function renderLayout({ appName, title, currentPath, sidebar, content, cu
         </section>
       </main>
     </div>
+    <script type="module" src="/public/sidebar.js"></script>
     ${bodyEnd}
   </body>
 </html>`;
 }
+
+
+
+
+

@@ -4,6 +4,8 @@ import { FitAddon } from "/vendor/@xterm/addon-fit/lib/addon-fit.mjs";
 function initTerminal() {
   const mount = document.querySelector(".js-terminal");
   const statusEl = document.querySelector(".js-terminal-status");
+  const reconnectButton = document.querySelector(".js-terminal-reconnect");
+  const banner = document.querySelector(".js-terminal-banner");
   if (!mount) return;
 
   const token = mount.dataset.terminalToken;
@@ -38,6 +40,11 @@ function initTerminal() {
   terminal.loadAddon(fitAddon);
   terminal.open(mount);
 
+  let socket = null;
+  let wasConnected = false;
+  let manualReconnectPending = false;
+  let disposeRequested = false;
+
   const viewport = () => mount.querySelector(".xterm-viewport");
   const isNearBottom = () => {
     const element = viewport();
@@ -62,63 +69,199 @@ function initTerminal() {
     });
   };
 
-  fit();
-  terminal.focus();
-
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const socket = new WebSocket(`${protocol}//${window.location.host}/terminal/ws?token=${encodeURIComponent(token)}`);
-
-  function setStatus(text) {
-    if (statusEl) statusEl.textContent = text;
+  function setBanner(message = "", kind = "info") {
+    if (!banner) return;
+    banner.textContent = message;
+    banner.className = `terminal-banner js-terminal-banner terminal-banner-${kind}`;
+    banner.classList.toggle("is-hidden", !message);
   }
 
-  socket.addEventListener("open", () => {
-    setStatus("Opening websocket...");
-    fit();
-    socket.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
-  });
+  function setStatus(text, state = "neutral") {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.dataset.terminalState = state;
+    statusEl.className = `status-pill js-terminal-status status-pill-${state}`;
+  }
 
-  socket.addEventListener("message", (event) => {
-    const payload = JSON.parse(event.data);
-    if (payload.type === "data") {
-      writeOutput(payload.data);
+  function setReconnectEnabled(enabled) {
+    if (reconnectButton) reconnectButton.disabled = !enabled;
+  }
+
+  function sendResize() {
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
+    }
+  }
+
+  function connect(isManualReconnect = false) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      setStatus("Already connected", "connected");
+      setBanner("Live SSH session is already attached.", "success");
       return;
     }
 
-    if (payload.type === "status") {
-      setStatus(payload.message || payload.status || "Terminal update");
-      if (payload.status === "error") {
-        writeOutput(`\r\n[terminux] ${payload.message}\r\n`);
-      }
+    if (socket && socket.readyState === WebSocket.CONNECTING) {
+      return;
     }
-  });
 
-  socket.addEventListener("close", () => {
-    setStatus("Terminal disconnected.");
-  });
+    if (isManualReconnect) {
+      writeOutput("\r\n[terminux] reconnect requested...\r\n");
+    }
 
-  socket.addEventListener("error", () => {
-    setStatus("Websocket error.");
-    writeOutput("\r\n[terminux] Websocket transport error.\r\n");
-  });
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    socket = new WebSocket(`${protocol}//${window.location.host}/terminal/ws?token=${encodeURIComponent(token)}`);
+
+    setStatus(isManualReconnect ? "Reconnecting..." : "Opening websocket...", "connecting");
+    setBanner(isManualReconnect ? "Trying to reattach or reopen the SSH session..." : "Preparing terminal transport...", "info");
+    setReconnectEnabled(false);
+
+    socket.addEventListener("open", () => {
+      setStatus(isManualReconnect ? "Reconnecting..." : "Opening websocket...", "connecting");
+      fit();
+      sendResize();
+    });
+
+    socket.addEventListener("message", (event) => {
+      const payload = JSON.parse(event.data);
+      if (payload.type === "data") {
+        writeOutput(payload.data);
+        return;
+      }
+
+      if (payload.type === "lifecycle") {
+        if (payload.state === "connected" && payload.hasHistory) {
+          wasConnected = true;
+          setStatus("Connected", "connected");
+          setBanner("Reattached to the active background session.", "success");
+          setReconnectEnabled(true);
+          return;
+        }
+
+        if ((payload.state === "closed" || payload.state === "error") && payload.ttlMs) {
+          const seconds = Math.max(1, Math.round(payload.ttlMs / 1000));
+          setBanner(`Previous terminal state is still available for about ${seconds}s while you decide whether to reconnect.`, payload.state === "error" ? "error" : "warning");
+          setReconnectEnabled(true);
+          return;
+        }
+
+        return;
+      }
+
+      if (payload.type !== "status") return;
+
+      const status = payload.status || "info";
+      const message = payload.message || "Terminal update";
+
+      if (status === "connecting") {
+        setStatus("Connecting...", "connecting");
+        setBanner(message, "info");
+        return;
+      }
+
+      if (status === "connected") {
+        wasConnected = true;
+        setStatus("Connected", "connected");
+        setBanner("Live SSH session is ready.", "success");
+        setReconnectEnabled(true);
+        return;
+      }
+
+      if (status === "closed") {
+        setStatus("Disconnected", "disconnected");
+        setBanner(message, "warning");
+        setReconnectEnabled(true);
+        return;
+      }
+
+      if (status === "error") {
+        setStatus("Connection error", "error");
+        setBanner(message, "error");
+        writeOutput(`\r\n[terminux] ${message}\r\n`);
+        setReconnectEnabled(true);
+        return;
+      }
+
+      setStatus(message, "neutral");
+    });
+
+    socket.addEventListener("close", () => {
+      const shouldReconnect = manualReconnectPending && !disposeRequested;
+      socket = null;
+
+      if (shouldReconnect) {
+        manualReconnectPending = false;
+        connect(true);
+        return;
+      }
+
+      if (disposeRequested) {
+        return;
+      }
+
+      const message = wasConnected
+        ? "Terminal transport closed. The SSH session may still be alive in the background for a while."
+        : "Terminal transport closed before the session finished opening.";
+      setStatus("Disconnected", "disconnected");
+      setBanner(message, "warning");
+      setReconnectEnabled(true);
+    });
+
+    socket.addEventListener("error", () => {
+      if (disposeRequested) return;
+      setStatus("Websocket error", "error");
+      setBanner("Websocket transport failed. Try reconnecting.", "error");
+      writeOutput("\r\n[terminux] Websocket transport error.\r\n");
+      setReconnectEnabled(true);
+    });
+  }
+
+  fit();
+  terminal.focus();
+  setReconnectEnabled(false);
+  connect(false);
 
   terminal.onData((data) => {
-    if (socket.readyState === WebSocket.OPEN) {
+    if (socket?.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: "input", data }));
     }
   });
 
   const resizeObserver = new ResizeObserver(() => {
     fit();
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
-    }
+    sendResize();
   });
   resizeObserver.observe(mount);
 
+  reconnectButton?.addEventListener("click", () => {
+    if (socket?.readyState === WebSocket.CONNECTING) {
+      return;
+    }
+
+    manualReconnectPending = true;
+    setReconnectEnabled(false);
+    setStatus("Reconnecting...", "connecting");
+    setBanner("Closing the current transport and asking the server to resume or reopen the session...", "info");
+
+    if (!socket || socket.readyState >= WebSocket.CLOSING) {
+      manualReconnectPending = false;
+      connect(true);
+      return;
+    }
+
+    try {
+      socket.close();
+    } catch {
+      manualReconnectPending = false;
+      connect(true);
+    }
+  });
+
   window.addEventListener("beforeunload", () => {
+    disposeRequested = true;
     resizeObserver.disconnect();
-    socket.close();
+    try {
+      socket?.close();
+    } catch {}
     terminal.dispose();
   });
 }

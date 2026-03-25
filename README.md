@@ -10,6 +10,7 @@ The Docker image is designed to start clean:
 - the app creates its database automatically on first start
 - the first run seeds one admin user from env
 - persistent data lives in `/app/storage`
+- the image includes a built-in Docker `HEALTHCHECK` against `/health`
 
 ## Local run
 
@@ -32,6 +33,12 @@ Run in background:
 
 ```bash
 docker compose up --build -d
+```
+
+Check status and health:
+
+```bash
+docker compose ps
 ```
 
 Stop it:
@@ -67,7 +74,9 @@ Run it from Docker Hub:
 ```bash
 docker run -d \
   --name terminux \
+  --restart unless-stopped \
   -p 3000:3000 \
+  -e APP_HOST=0.0.0.0 \
   -e APP_MASTER_KEY=replace-with-a-long-random-secret \
   -e SESSION_SECRET=replace-with-another-long-random-secret \
   -e ADMIN_USERNAME=admin \
@@ -77,6 +86,18 @@ docker run -d \
 ```
 
 Then open `http://localhost:3000`.
+
+Check container health:
+
+```bash
+docker ps
+```
+
+Inspect the health probe directly:
+
+```bash
+docker inspect --format='{{json .State.Health}}' terminux
+```
 
 ## GitHub Actions publish
 
@@ -109,3 +130,13 @@ Default image-friendly credentials are:
 - password: `admin123`
 
 Change them through env before production use.
+
+## Production notes
+
+Before exposing the app publicly, make sure you:
+
+- replace `APP_MASTER_KEY` with a long random secret
+- replace `SESSION_SECRET` with a different long random secret
+- change the default admin password
+- mount `/app/storage` to persistent disk or a named volume
+- publish only the external port you actually need

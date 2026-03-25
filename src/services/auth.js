@@ -51,22 +51,13 @@ export async function requireGuest(request, reply) {
   reply.redirect("/");
 }
 
-export async function requireAdmin(request, reply) {
+export async function requireAdmin(request, _reply) {
   if (request.currentUser?.role === "admin") {
     return;
   }
 
-  reply.code(403).type("text/html").send(`<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>403 · terminux</title>
-  </head>
-  <body style="background:#0a0f14;color:#edf3f8;font-family:Segoe UI,sans-serif;padding:40px">
-    <h1>403</h1>
-    <p>This page is available to administrators only.</p>
-    <p><a href="/" style="color:#68d2b3">Return to workspace</a></p>
-  </body>
-</html>`);
+  const error = new Error("This page is available to administrators only.");
+  error.statusCode = 403;
+  throw error;
 }
+

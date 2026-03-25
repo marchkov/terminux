@@ -23,6 +23,69 @@ export function listSharedSessions(db, userId) {
   `).all(userId);
 }
 
+export function listFavoriteSessions(db, currentUser) {
+  return db.prepare(`
+    SELECT s.id, s.owner_user_id, s.group_id, s.name, s.host, s.port, s.username, s.auth_type,
+           s.notes, s.created_at, s.updated_at,
+           owner.username AS owner_username,
+           g.name AS group_name,
+           1 AS is_favorite
+    FROM session_favorites f
+    JOIN ssh_sessions s ON s.id = f.session_id
+    JOIN users owner ON owner.id = s.owner_user_id
+    LEFT JOIN session_groups g ON g.id = s.group_id
+    WHERE f.user_id = @userId
+      AND (
+        @role = 'admin'
+        OR s.owner_user_id = @userId
+        OR EXISTS (
+          SELECT 1
+          FROM session_shares sh
+          WHERE sh.session_id = s.id AND sh.shared_with_user_id = @userId
+        )
+      )
+    ORDER BY f.created_at DESC, s.name COLLATE NOCASE ASC
+  `).all({ userId: currentUser.id, role: currentUser.role });
+}
+
+export function isSessionFavorite(db, userId, sessionId) {
+  const row = db.prepare(`
+    SELECT 1
+    FROM session_favorites
+    WHERE user_id = ? AND session_id = ?
+  `).get(userId, sessionId);
+
+  return Boolean(row);
+}
+
+export function addSessionFavorite(db, currentUser, sessionId) {
+  const session = getAccessibleSession(db, currentUser, sessionId);
+  if (!session) {
+    return { error: "session-not-found" };
+  }
+
+  db.prepare(`
+    INSERT OR IGNORE INTO session_favorites (user_id, session_id)
+    VALUES (?, ?)
+  `).run(currentUser.id, sessionId);
+
+  return { ok: true };
+}
+
+export function removeSessionFavorite(db, currentUser, sessionId) {
+  const session = getAccessibleSession(db, currentUser, sessionId);
+  if (!session) {
+    return { error: "session-not-found" };
+  }
+
+  db.prepare(`
+    DELETE FROM session_favorites
+    WHERE user_id = ? AND session_id = ?
+  `).run(currentUser.id, sessionId);
+
+  return { ok: true };
+}
+
 export function listSessionShares(db, sessionId) {
   return db.prepare(`
     SELECT u.id, u.username, u.role
@@ -54,7 +117,10 @@ export function getAccessibleSession(db, currentUser, sessionId) {
   }
 
   if (currentUser.role === "admin" || base.owner_user_id === currentUser.id) {
-    return base;
+    return {
+      ...base,
+      is_favorite: isSessionFavorite(db, currentUser.id, base.id)
+    };
   }
 
   const shared = db.prepare(`
@@ -63,13 +129,19 @@ export function getAccessibleSession(db, currentUser, sessionId) {
     WHERE session_id = ? AND shared_with_user_id = ?
   `).get(sessionId, currentUser.id);
 
-  return shared ? base : null;
+  return shared
+    ? {
+        ...base,
+        is_favorite: isSessionFavorite(db, currentUser.id, base.id)
+      }
+    : null;
 }
 
 export function getEditableSession(db, currentUser, sessionId) {
   const session = db.prepare(`
-    SELECT s.*, g.name AS group_name
+    SELECT s.*, owner.username AS owner_username, g.name AS group_name
     FROM ssh_sessions s
+    JOIN users owner ON owner.id = s.owner_user_id
     LEFT JOIN session_groups g ON g.id = s.group_id
     WHERE s.id = ?
   `).get(sessionId);
@@ -85,6 +157,7 @@ export function getEditableSession(db, currentUser, sessionId) {
   return {
     id: session.id,
     owner_user_id: session.owner_user_id,
+    owner_username: session.owner_username,
     group_id: session.group_id,
     name: session.name,
     host: session.host,
@@ -92,7 +165,8 @@ export function getEditableSession(db, currentUser, sessionId) {
     username: session.username,
     auth_type: session.auth_type,
     notes: session.notes,
-    group_name: session.group_name
+    group_name: session.group_name,
+    is_favorite: isSessionFavorite(db, currentUser.id, session.id)
   };
 }
 
