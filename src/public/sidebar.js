@@ -11,14 +11,11 @@ function initSidebarSearch() {
   const ownedCards = Array.from(document.querySelectorAll("[data-group-card]"));
   const sharedCards = Array.from(document.querySelectorAll("[data-shared-card]"));
   const favoriteCards = Array.from(document.querySelectorAll("[data-favorite-card]"));
-  const recentCards = Array.from(document.querySelectorAll("[data-recent-card]"));
   const ownedFilterEmpty = document.querySelector("[data-owned-filter-empty]");
   const sharedFilterEmpty = document.querySelector("[data-shared-filter-empty]");
   const favoritesFilterEmpty = document.querySelector("[data-favorites-filter-empty]");
-  const recentFilterEmpty = document.querySelector("[data-recent-filter-empty]");
   const sharedStaticEmpty = document.querySelector("[data-shared-empty]");
   const favoritesStaticEmpty = document.querySelector("[data-favorites-empty]");
-  const recentStaticEmpty = document.querySelector("[data-recent-empty]");
   const searchMeta = document.querySelector("[data-sidebar-search-meta]");
 
   function setMeta(textValue) {
@@ -81,7 +78,6 @@ function initSidebarSearch() {
     filterOwned(term);
     filterFlatCards(sharedCards, sharedStaticEmpty, sharedFilterEmpty, term);
     filterFlatCards(favoriteCards, favoritesStaticEmpty, favoritesFilterEmpty, term);
-    filterFlatCards(recentCards, recentStaticEmpty, recentFilterEmpty, term);
 
     if (!term) {
       setMeta("Type to filter your workspace.");

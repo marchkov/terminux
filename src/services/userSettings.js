@@ -22,7 +22,7 @@ export function getUserSettings(db, userId) {
 }
 
 export function updateUserSettings(db, userId, payload = {}) {
-  const theme = payload.theme === 'dark' ? 'dark' : 'dark';
+  const theme = payload.theme === 'light' ? 'light' : 'dark';
   const terminalFontSize = Math.max(12, Math.min(20, Number(payload.terminal_font_size || 14)));
 
   getUserSettings(db, userId);

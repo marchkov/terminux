@@ -15,25 +15,43 @@ function initTerminal() {
     return;
   }
 
+  const themeMode = document.body.dataset.theme === "light" ? "light" : "dark";
+  const terminalTheme = themeMode === "light"
+    ? {
+        background: "#f7f2e9",
+        foreground: "#304150",
+        cursor: "#2f8f7b",
+        black: "#c9d3dc",
+        brightBlack: "#7b8b99",
+        red: "#c96c67",
+        green: "#5a9a78",
+        yellow: "#b78c3b",
+        blue: "#638fb3",
+        magenta: "#9a78b4",
+        cyan: "#4c9ba0",
+        white: "#ffffff"
+      }
+    : {
+        background: "#08111a",
+        foreground: "#dbe7f3",
+        cursor: "#68d2b3",
+        black: "#0b1218",
+        brightBlack: "#567086",
+        red: "#f97373",
+        green: "#67d38f",
+        yellow: "#f7c35f",
+        blue: "#7dd3fc",
+        magenta: "#c084fc",
+        cyan: "#68d2b3",
+        white: "#edf3f8"
+      };
+
   const terminal = new Terminal({
     cursorBlink: true,
     convertEol: true,
     fontSize: Number.isFinite(terminalFontSize) ? terminalFontSize : 14,
     scrollback: 10000,
-    theme: {
-      background: "#08111a",
-      foreground: "#dbe7f3",
-      cursor: "#68d2b3",
-      black: "#0b1218",
-      brightBlack: "#567086",
-      red: "#f97373",
-      green: "#67d38f",
-      yellow: "#f7c35f",
-      blue: "#7dd3fc",
-      magenta: "#c084fc",
-      cyan: "#68d2b3",
-      white: "#edf3f8"
-    }
+    theme: terminalTheme
   });
 
   const fitAddon = new FitAddon();

@@ -12,6 +12,8 @@ export function renderLayout({ appName, title, currentPath, sidebar, content, cu
     ? navItem("Audit", "/audit", currentPath === "/audit")
     : "";
 
+  const theme = currentUser?.theme === "light" ? "light" : "dark";
+
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -22,7 +24,7 @@ export function renderLayout({ appName, title, currentPath, sidebar, content, cu
     <link rel="stylesheet" href="/public/styles.css" />
     ${headExtras}
   </head>
-  <body>
+  <body data-theme="${theme}">
     <div class="app-shell">
       <header class="topbar">
         <div class="brand-block">

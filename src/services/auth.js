@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import { findUserById, findUserByUsername } from "./users.js";
+import { getUserSettings } from "./userSettings.js";
 
 export async function attachCurrentUser(request) {
   const userId = request.session?.userId;
@@ -9,7 +10,12 @@ export async function attachCurrentUser(request) {
   }
 
   const user = findUserById(request.server.db, userId);
-  request.currentUser = user && user.is_active ? user : null;
+  if (user && user.is_active) {
+    const settings = getUserSettings(request.server.db, user.id);
+    request.currentUser = { ...user, theme: settings.theme };
+  } else {
+    request.currentUser = null;
+  }
 
   if (!request.currentUser) {
     request.session.userId = null;

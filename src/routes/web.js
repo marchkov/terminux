@@ -18,6 +18,8 @@ import {
 } from "../services/sessions.js";
 import { changeUserPasswordSafe, createUserSafe, deleteUser, findUserById, listActiveUsers, listUsers, setUserActive } from "../services/users.js";
 import { listAuditLogs, writeAuditLog } from "../services/audit.js";
+import { exportUserBackup, importUserBackup } from "../services/backup.js";
+import { getUpdateStatus } from "../services/updateCheck.js";
 import { getUserSettings, updateUserSettings } from "../services/userSettings.js";
 
 function escapeHtml(value) {
@@ -102,18 +104,6 @@ function renderSidebar(currentUser, groups, ownedSessions, sharedSessions, favor
       }).join("")
     : '<div class="empty-note" data-favorites-empty>No favorites yet.</div>';
 
-  const recentBlock = recentSessions.length
-    ? recentSessions.map((session) => {
-        const activeClass = session.id === selectedSessionId ? "session-link active" : "session-link";
-        const ownerLabel = session.owner_user_id ? (session.owner_username || "you") : "you";
-        return `
-          <div class="group-card shared" data-recent-card data-session-name="${escapeHtml(session.name)}" data-owner-name="${escapeHtml(ownerLabel)}">
-            <div class="share-meta">${escapeHtml(session.host)} - ${escapeHtml(ownerLabel)}</div>
-            <a class="${activeClass}" href="/?session_id=${session.id}">${escapeHtml(session.name)}</a>
-          </div>
-        `;
-      }).join("")
-    : '<div class="empty-note" data-recent-empty>No recent sessions yet.</div>';
 
   return `
     <div class="sidebar-header">
@@ -138,11 +128,6 @@ function renderSidebar(currentUser, groups, ownedSessions, sharedSessions, favor
       <div class="empty-note is-hidden" data-favorites-filter-empty>No favorite sessions match this search.</div>
     </div>
 
-    <div class="sidebar-section" data-sidebar-recent>
-      <div class="section-label">Recent</div>
-      ${recentBlock}
-      <div class="empty-note is-hidden" data-recent-filter-empty>No recent sessions match this search.</div>
-    </div>
 
     <div class="sidebar-section" data-sidebar-owned>
       <div class="section-label">My Sessions</div>
@@ -194,6 +179,9 @@ function renderFlash(params) {
   if (error === "share-exists") return '<div class="flash error">That user already has access.</div>';
   if (ok === "settings-saved") return '<div class="flash success">Settings saved successfully.</div>';
   if (ok === "password-updated") return '<div class="flash success">Password updated successfully.</div>';
+  if (error === "backup-empty") return '<div class="flash error">Choose a backup file or paste backup JSON before importing.</div>';
+  if (error === "backup-invalid") return '<div class="flash error">The backup file is not a valid terminux backup.</div>';
+  if (error === "backup-import-failed") return '<div class="flash error">Backup import failed. Check the file contents and try again.</div>';
   if (error === "password-missing-fields") return '<div class="flash error">Fill in current password, new password and confirmation.</div>';
   if (error === "password-current-invalid") return '<div class="flash error">Current password is incorrect.</div>';
   if (error === "password-confirm-mismatch") return '<div class="flash error">New password and confirmation do not match.</div>';
@@ -816,7 +804,7 @@ function renderAuditPage(appName, currentUser, entries, params, groups, ownedSes
     `
   });
 }
-function renderSettingsPage(appName, currentUser, settings, params, groups, ownedSessions, sharedSessions, favoriteSessions, recentSessions, activeSessionId) {
+function renderSettingsPage(appName, currentUser, settings, updateStatus, params, groups, ownedSessions, sharedSessions, favoriteSessions, recentSessions, activeSessionId) {
   return renderLayout({
     appName,
     title: "Settings",
@@ -824,26 +812,70 @@ function renderSettingsPage(appName, currentUser, settings, params, groups, owne
     sidebar: renderSidebar(currentUser, groups, ownedSessions, sharedSessions, favoriteSessions, recentSessions, activeSessionId),
     currentUser,
     activeSessionId,
+    bodyEnd: '<script type="module" src="/public/settings-backup.js"></script>',
     content: `
       ${renderFlash(params)}
-      <section class="info-card narrow-card">
-        <div class="eyebrow">Preferences</div>
-        <h1>Settings</h1>
-        <p>Choose how the terminal should look and behave for your account.</p>
-        <form class="stack-form" method="post" action="/settings">
-          <label class="field">
-            <span>Theme</span>
-            <select name="theme">
-              <option value="dark" ${settings.theme === "dark" ? "selected" : ""}>Dark</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Terminal font size</span>
-            <input name="terminal_font_size" type="number" min="12" max="20" value="${escapeHtml(settings.terminal_font_size)}" required />
-          </label>
-          <button class="primary-button" type="submit">Save settings</button>
-        </form>
-      </section>
+      <div class="split-grid profile-grid settings-grid">
+        <section class="info-card">
+          <div class="eyebrow">Version</div>
+          <h1>Update status</h1>
+          <div class="meta-list">
+            <div><span>Current version</span><strong>${escapeHtml(updateStatus.currentVersion)}</strong></div>
+            <div><span>Latest version</span><strong>${escapeHtml(updateStatus.latestVersion)}</strong></div>
+            <div><span>Status</span><strong>${updateStatus.hasUpdate ? "Update available" : updateStatus.error ? "Unable to check" : "Up to date"}</strong></div>
+            <div><span>Last checked</span><strong>${escapeHtml(updateStatus.checkedAt ? new Date(updateStatus.checkedAt).toLocaleString("en-GB") : "Not checked yet")}</strong></div>
+          </div>
+          <p class="inline-hint">Version checks are shared across the whole workspace and run at most once every 24 hours. Source: ${escapeHtml(updateStatus.source)}</p>
+          ${updateStatus.error ? `<div class="form-error">${escapeHtml(updateStatus.error)}</div>` : ""}
+        </section>
+        <section class="info-card">
+          <div class="eyebrow">Preferences</div>
+          <h1>Settings</h1>
+          <p>Choose how the terminal should look and behave for your account.</p>
+          <form class="stack-form" method="post" action="/settings">
+            <label class="field">
+              <span>Theme</span>
+              <select name="theme">
+                <option value="dark" ${settings.theme === "dark" ? "selected" : ""}>Dark</option>
+                <option value="light" ${settings.theme === "light" ? "selected" : ""}>Soft light</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Terminal font size</span>
+              <input name="terminal_font_size" type="number" min="12" max="20" value="${escapeHtml(settings.terminal_font_size)}" required />
+            </label>
+            <button class="primary-button" type="submit">Save settings</button>
+          </form>
+        </section>
+
+        <section class="info-card settings-backup-card">
+          <div class="eyebrow">Backup</div>
+          <h1>Export or restore your workspace</h1>
+          <p>Download your own settings, groups and SSH sessions as a portable JSON backup. Import restores them under your current account and re-encrypts secrets for this instance.</p>
+          <div class="backup-split">
+            <section class="backup-pane">
+              <div class="eyebrow">Export</div>
+              <h2>Download a fresh copy</h2>
+              <p>Save your current workspace as a JSON file that you can keep offline or restore later on another instance.</p>
+              <a class="primary-button" href="/settings/backup">Download backup JSON</a>
+            </section>
+            <section class="backup-pane">
+              <div class="eyebrow">Import</div>
+              <h2>Restore into this account</h2>
+              <p>Choose a backup exported from terminux. The file stays local until you submit the import form.</p>
+              <form class="stack-form no-top-gap" method="post" action="/settings/backup/import" data-backup-import-form>
+                <label class="field">
+                  <span>Backup file</span>
+                  <input type="file" accept="application/json,.json" data-backup-file />
+                </label>
+                <div class="table-filter-meta" data-backup-file-meta>No file selected yet.</div>
+                <textarea class="is-hidden" name="backup_json" data-backup-json></textarea>
+                <button class="ghost-button" type="submit" data-backup-submit disabled>Import backup</button>
+              </form>
+            </section>
+          </div>
+        </section>
+      </div>
     `
   });
 }
@@ -1339,6 +1371,37 @@ export async function registerWebRoutes(app, { config }) {
     reply.redirect("/settings?ok=settings-saved");
   });
 
+  app.get("/settings/backup", { preHandler: requireAuth }, async (request, reply) => {
+    const backup = exportUserBackup(app.db, config, request.currentUser);
+    const safeName = String(request.currentUser.username || "user").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+    reply
+      .header("Content-Type", "application/json; charset=utf-8")
+      .header("Content-Disposition", 'attachment; filename="terminux-backup-' + safeName + '.json"')
+      .send(JSON.stringify(backup, null, 2));
+  });
+
+  app.post("/settings/backup/import", { preHandler: requireAuth }, async (request, reply) => {
+    const result = importUserBackup(app.db, config, request.currentUser, request.body?.backup_json);
+    if (result.error) {
+      reply.redirect(`/settings?error=${result.error}`);
+      return;
+    }
+
+    writeAuditLog(app.db, {
+      actorUserId: request.currentUser.id,
+      action: "settings.backup.import",
+      targetType: "user_settings",
+      targetId: request.currentUser.id,
+      meta: {
+        groupsCreated: result.groupsCreated,
+        sessionsCreated: result.sessionsCreated,
+        sessionsUpdated: result.sessionsUpdated
+      }
+    });
+
+    reply.redirect("/settings?ok=backup-imported");
+  });
+
   app.get("/users/new", { preHandler: [requireAuth, requireAdmin] }, async (request, reply) => {
     const data = loadWorkspaceData(app, request.currentUser, {
       rememberedSessionId: request.session.activeSessionId ? Number(request.session.activeSessionId) : null,
@@ -1474,6 +1537,11 @@ export async function registerWebRoutes(app, { config }) {
     reply.redirect("/profile?ok=password-updated");
   });
 }
+
+
+
+
+
 
 
 
