@@ -71,10 +71,17 @@ function initTerminal() {
     return distance < 24;
   };
 
-  const fit = () => {
+  const fit = (afterFit) => {
     requestAnimationFrame(() => {
       fitAddon.fit();
       terminal.scrollToBottom();
+      afterFit?.();
+    });
+  };
+
+  const fitAndResize = () => {
+    fit(() => {
+      sendResize();
     });
   };
 
@@ -135,8 +142,7 @@ function initTerminal() {
 
     socket.addEventListener("open", () => {
       setStatus(isManualReconnect ? "Reconnecting..." : "Opening websocket...", "connecting");
-      fit();
-      sendResize();
+      fitAndResize();
     });
 
     socket.addEventListener("message", (event) => {
@@ -233,7 +239,7 @@ function initTerminal() {
     });
   }
 
-  fit();
+  fitAndResize();
   terminal.focus();
   setReconnectEnabled(false);
   connect(false);
@@ -245,8 +251,7 @@ function initTerminal() {
   });
 
   const resizeObserver = new ResizeObserver(() => {
-    fit();
-    sendResize();
+    fitAndResize();
   });
   resizeObserver.observe(mount);
 

@@ -5,6 +5,8 @@ import { getTerminalSessionConfig } from "./sessions.js";
 const MAX_HISTORY_CHARS = 250000;
 const IDLE_TTL_MS = 15 * 60 * 1000;
 const CLOSED_TTL_MS = 3 * 60 * 1000;
+const DEFAULT_COLS = 120;
+const DEFAULT_ROWS = 32;
 
 function payloadSize(payload) {
   return JSON.stringify(payload).length;
@@ -122,7 +124,10 @@ export function createTerminalManager({ db, config }) {
 
       pushStatus(entry, "connected", `Connected to ${sshConfig.name}`);
 
-      conn.shell({ term: "xterm-256color", cols: 120, rows: 32 }, (error, stream) => {
+      const cols = Number.isInteger(entry.cols) && entry.cols > 0 ? entry.cols : DEFAULT_COLS;
+      const rows = Number.isInteger(entry.rows) && entry.rows > 0 ? entry.rows : DEFAULT_ROWS;
+
+      conn.shell({ term: "xterm-256color", cols, rows }, (error, stream) => {
         if (entry.destroyed) return;
 
         if (error) {
@@ -230,7 +235,9 @@ export function createTerminalManager({ db, config }) {
         cleanupTimer: null,
         cleanupDeadline: null,
         cleanupReason: null,
-        destroyed: false
+        destroyed: false,
+        cols: DEFAULT_COLS,
+        rows: DEFAULT_ROWS
       };
 
       sessions.set(key, entry);
@@ -260,10 +267,21 @@ export function createTerminalManager({ db, config }) {
           if (message.type === "input" && entry.channel) {
             entry.channel.write(message.data || "");
           }
-          if (message.type === "resize" && entry.channel) {
-            const cols = Number(message.cols || 120);
-            const rows = Number(message.rows || 32);
-            entry.channel.setWindow(rows, cols, 0, 0);
+          if (message.type === "resize") {
+            const cols = Number(message.cols || DEFAULT_COLS);
+            const rows = Number(message.rows || DEFAULT_ROWS);
+
+            if (Number.isFinite(cols) && cols > 0) {
+              entry.cols = Math.max(1, Math.floor(cols));
+            }
+
+            if (Number.isFinite(rows) && rows > 0) {
+              entry.rows = Math.max(1, Math.floor(rows));
+            }
+
+            if (entry.channel) {
+              entry.channel.setWindow(entry.rows, entry.cols, 0, 0);
+            }
           }
         } catch (error) {
           if (socket.readyState === 1) {
