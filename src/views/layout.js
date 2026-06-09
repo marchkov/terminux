@@ -5,6 +5,7 @@ function navItem(label, href, isActive = false) {
 
 export function renderLayout({ appName, title, currentPath, sidebar, content, currentUser, activeSessionId = null, headExtras = "", bodyEnd = "" }) {
   const sessionsHref = activeSessionId ? `/?session_id=${activeSessionId}` : "/";
+  const assetVersion = "2026-06-09-terminal-fit-3";
   const usersLink = currentUser?.role === "admin"
     ? navItem("Users", "/users", currentPath === "/users")
     : "";
@@ -21,7 +22,7 @@ export function renderLayout({ appName, title, currentPath, sidebar, content, cu
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${title} - ${appName}</title>
     <link rel="icon" type="image/svg+xml" href="/public/favicon.svg" />
-    <link rel="stylesheet" href="/public/styles.css" />
+    <link rel="stylesheet" href="/public/styles.css?v=${assetVersion}" />
     ${headExtras}
   </head>
   <body data-theme="${theme}">
@@ -51,7 +52,7 @@ export function renderLayout({ appName, title, currentPath, sidebar, content, cu
         </section>
       </main>
     </div>
-    <script type="module" src="/public/sidebar.js"></script>
+    <script type="module" src="/public/sidebar.js?v=${assetVersion}"></script>
     ${bodyEnd}
   </body>
 </html>`;

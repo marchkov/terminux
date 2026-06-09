@@ -547,8 +547,8 @@ function renderHomePage(appName, currentUser, groups, ownedSessions, sharedSessi
     sidebar,
     currentUser,
     activeSessionId,
-    headExtras: '<link rel="stylesheet" href="/vendor/@xterm/xterm/css/xterm.css" />',
-    bodyEnd: selectedSession ? '<script type="module" src="/public/terminal.js"></script>' : '',
+    headExtras: '<link rel="stylesheet" href="/vendor/@xterm/xterm/css/xterm.css?v=2026-06-09-terminal-fit-3" />',
+    bodyEnd: selectedSession ? '<script type="module" src="/public/terminal.js?v=2026-06-09-terminal-fit-3"></script>' : '',
     content: `
       ${renderFlash(params)}
       ${renderConnectedSession(selectedSession, currentUser, groups, ownedSessions, sharedSessions, favoriteSessions, recentSessions, shareCandidates, sharedUsers, terminalToken, terminalFontSize)}
