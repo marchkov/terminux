@@ -64,6 +64,14 @@ function initTerminal() {
   let disposeRequested = false;
 
   const viewport = () => mount.querySelector(".xterm-viewport");
+  const keepCursorVisible = () => {
+    terminal.scrollToBottom();
+    const element = viewport();
+    if (element) {
+      element.scrollTop = element.scrollHeight;
+    }
+  };
+
   const isNearBottom = () => {
     const element = viewport();
     if (!element) return true;
@@ -74,7 +82,7 @@ function initTerminal() {
   const fit = (afterFit) => {
     requestAnimationFrame(() => {
       fitAddon.fit();
-      terminal.scrollToBottom();
+      keepCursorVisible();
       afterFit?.();
     });
   };
@@ -89,7 +97,7 @@ function initTerminal() {
     const stickToBottom = isNearBottom();
     terminal.write(data, () => {
       if (stickToBottom) {
-        terminal.scrollToBottom();
+        keepCursorVisible();
       }
     });
   };
@@ -245,9 +253,11 @@ function initTerminal() {
   connect(false);
 
   terminal.onData((data) => {
+    keepCursorVisible();
     if (socket?.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: "input", data }));
     }
+    requestAnimationFrame(keepCursorVisible);
   });
 
   const resizeObserver = new ResizeObserver(() => {
