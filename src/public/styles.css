@@ -292,7 +292,7 @@ textarea { width: 100%; resize: vertical; }
 .terminal-banner-warning { color: #f8d7a0; background: rgba(247, 195, 95, 0.08); }
 .terminal-banner-error { color: #ffb5b5; background: rgba(249, 115, 115, 0.08); }
 .terminal-mount {
-  flex: 1; min-height: 0; height: 100%; padding: 8px; overflow: hidden; background: #08111a;
+  flex: 1; min-height: 0; height: 100%; padding: 0; overflow: hidden; background: #08111a;
 }
 .terminal-mount .xterm {
   height: 100%;
@@ -302,7 +302,7 @@ textarea { width: 100%; resize: vertical; }
   padding-right: 2px;
 }
 .terminal-mount .xterm {
-  padding: 0; border-radius: 5px; overflow: hidden;
+  border-radius: 5px; overflow: hidden;
 }
 .terminal-shell:focus-within,
 .table-wrap:focus-within {
